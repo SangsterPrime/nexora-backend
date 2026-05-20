@@ -1,0 +1,16 @@
+target/
+.mvn/
+.git/
+.gitignore
+.gitattributes
+.env
+.env.*
+!.env.example
+.qodo
+.idea/
+.vscode/
+*.iml
+*.log
+README.md
+resumen.md
+resumen2.md

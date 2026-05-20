@@ -1,0 +1,15 @@
+target/
+.mvn/
+.git/
+.gitignore
+.gitattributes
+.env
+.env.*
+!.env.example
+.qodo
+.idea/
+.vscode/
+*.iml
+*.log
+docs/bitacora/
+Nexora_MER_REVISADO_SpringBoot.png
