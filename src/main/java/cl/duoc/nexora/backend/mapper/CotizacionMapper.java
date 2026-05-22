@@ -24,14 +24,7 @@ public final class CotizacionMapper {
         return cotizacion;
     }
 
-    public static void updateEntity(
-            Cotizacion cotizacion,
-            CotizacionRequest request,
-            SolicitudCompra solicitudCompra,
-            Proveedor proveedor
-    ) {
-        cotizacion.setSolicitudCompra(solicitudCompra);
-        cotizacion.setProveedor(proveedor);
+    public static void updateEntity(Cotizacion cotizacion, CotizacionRequest request) {
         cotizacion.setMonto(request.monto());
         cotizacion.setPlazoEntregaDias(request.plazoEntregaDias());
         cotizacion.setCondiciones(request.condiciones());

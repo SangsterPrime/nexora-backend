@@ -23,7 +23,7 @@ public final class SolicitudCompraMapper {
         return solicitud;
     }
 
-    public static void updateEntity(SolicitudCompra solicitud, SolicitudCompraRequest request, Usuario usuarioSolicitante) {
+    public static void updateEntity(SolicitudCompra solicitud, SolicitudCompraRequest request) {
         solicitud.setTitulo(request.titulo());
         solicitud.setDescripcion(request.descripcion());
         solicitud.setCategoria(request.categoria());
@@ -32,7 +32,6 @@ public final class SolicitudCompraMapper {
         if (request.estado() != null) {
             solicitud.setEstado(request.estado());
         }
-        solicitud.setUsuarioSolicitante(usuarioSolicitante);
     }
 
     public static SolicitudCompraResponse toResponse(SolicitudCompra solicitud) {

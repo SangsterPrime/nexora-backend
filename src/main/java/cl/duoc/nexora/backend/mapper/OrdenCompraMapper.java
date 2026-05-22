@@ -27,15 +27,8 @@ public final class OrdenCompraMapper {
         return ordenCompra;
     }
 
-    public static void updateEntity(
-            OrdenCompra ordenCompra,
-            OrdenCompraRequest request,
-            SolicitudCompra solicitudCompra,
-            Cotizacion cotizacionGanadora
-    ) {
+    public static void updateEntity(OrdenCompra ordenCompra, OrdenCompraRequest request) {
         ordenCompra.setNumero(request.numero());
-        ordenCompra.setSolicitudCompra(solicitudCompra);
-        ordenCompra.setCotizacionGanadora(cotizacionGanadora);
         ordenCompra.setMontoTotal(request.montoTotal());
         if (request.estado() != null) {
             ordenCompra.setEstado(request.estado());

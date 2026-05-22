@@ -20,6 +20,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 @Entity
 @Table(name = "ordenes_compra")
@@ -53,15 +55,17 @@ public class OrdenCompra {
     private EstadoOrdenCompra estado;
 
     @Column(nullable = false, updatable = false)
+    @CreationTimestamp
     private LocalDateTime fechaEmision;
+
+    @Column(nullable = false)
+    @UpdateTimestamp
+    private LocalDateTime actualizadoEn;
 
     @PrePersist
     void prePersist() {
         if (estado == null) {
             estado = EstadoOrdenCompra.EMITIDA;
-        }
-        if (fechaEmision == null) {
-            fechaEmision = LocalDateTime.now();
         }
     }
 

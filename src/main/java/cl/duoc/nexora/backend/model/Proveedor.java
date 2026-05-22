@@ -17,6 +17,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 @Entity
 @Table(name = "proveedores")
@@ -40,7 +42,7 @@ public class Proveedor {
     @Column(length = 120)
     private String nombreContacto;
 
-    @Column(nullable = false, length = 160)
+    @Column(nullable = false, unique = true, length = 160)
     private String email;
 
     @Column(length = 30)
@@ -60,15 +62,17 @@ public class Proveedor {
     private EstadoProveedor estado;
 
     @Column(nullable = false, updatable = false)
+    @CreationTimestamp
     private LocalDateTime creadoEn;
+
+    @Column(nullable = false)
+    @UpdateTimestamp
+    private LocalDateTime actualizadoEn;
 
     @PrePersist
     void prePersist() {
         if (estado == null) {
             estado = EstadoProveedor.ACTIVO;
-        }
-        if (creadoEn == null) {
-            creadoEn = LocalDateTime.now();
         }
     }
 

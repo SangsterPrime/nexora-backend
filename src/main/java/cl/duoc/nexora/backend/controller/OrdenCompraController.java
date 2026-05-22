@@ -2,11 +2,14 @@ package cl.duoc.nexora.backend.controller;
 
 import cl.duoc.nexora.backend.dto.request.OrdenCompraRequest;
 import cl.duoc.nexora.backend.dto.response.OrdenCompraResponse;
+import cl.duoc.nexora.backend.enums.EstadoOrdenCompra;
 import cl.duoc.nexora.backend.service.OrdenCompraService;
 import jakarta.validation.Valid;
 import java.net.URI;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +18,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -25,8 +29,13 @@ public class OrdenCompraController {
     private final OrdenCompraService ordenCompraService;
 
     @GetMapping
-    public List<OrdenCompraResponse> listar() {
-        return ordenCompraService.listar();
+    public Page<OrdenCompraResponse> listar(
+            @RequestParam(required = false) EstadoOrdenCompra estado,
+            @RequestParam(required = false) Long proveedorId,
+            @RequestParam(required = false) Long solicitudCompraId,
+            @PageableDefault(size = 20, sort = "id") Pageable pageable
+    ) {
+        return ordenCompraService.listar(estado, proveedorId, solicitudCompraId, pageable);
     }
 
     @GetMapping("/{id}")

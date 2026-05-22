@@ -16,6 +16,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 @Entity
 @Table(name = "usuarios")
@@ -44,7 +46,12 @@ public class Usuario {
     private Boolean activo;
 
     @Column(nullable = false, updatable = false)
+    @CreationTimestamp
     private LocalDateTime creadoEn;
+
+    @Column(nullable = false)
+    @UpdateTimestamp
+    private LocalDateTime actualizadoEn;
 
     @PrePersist
     void prePersist() {
@@ -53,9 +60,6 @@ public class Usuario {
         }
         if (activo == null) {
             activo = Boolean.TRUE;
-        }
-        if (creadoEn == null) {
-            creadoEn = LocalDateTime.now();
         }
     }
 

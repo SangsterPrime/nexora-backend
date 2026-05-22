@@ -21,6 +21,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 @Entity
 @Table(name = "solicitudes_compra")
@@ -58,15 +60,17 @@ public class SolicitudCompra {
     private Usuario usuarioSolicitante;
 
     @Column(nullable = false, updatable = false)
+    @CreationTimestamp
     private LocalDateTime creadoEn;
+
+    @Column(nullable = false)
+    @UpdateTimestamp
+    private LocalDateTime actualizadoEn;
 
     @PrePersist
     void prePersist() {
         if (estado == null) {
             estado = EstadoSolicitudCompra.BORRADOR;
-        }
-        if (creadoEn == null) {
-            creadoEn = LocalDateTime.now();
         }
     }
 

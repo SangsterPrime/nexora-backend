@@ -34,10 +34,14 @@ Entidades principales:
 - Jakarta Validation
 - PostgreSQL 17.6
 - H2 para tests
+- JUnit 5
+- Mockito
+- MockMvc
 - Lombok
 - Maven
 - Docker Compose opcional
 - Spring Boot Actuator
+- Springdoc OpenAPI / Swagger UI
 
 ## Como correrlo
 
@@ -50,18 +54,20 @@ Entidades principales:
 
 ### Variables de entorno
 
-El proyecto incluye `.env.example` con valores locales sugeridos:
+El proyecto incluye `.env.example` con valores locales sugeridos para PostgreSQL 17.6:
 
 ```env
 PORT=8080
+
 SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/nexora_db
 SPRING_DATASOURCE_USERNAME=nexora_user
 SPRING_DATASOURCE_PASSWORD=nexora_password
+
 SPRING_JPA_HIBERNATE_DDL_AUTO=update
 SPRING_JPA_SHOW_SQL=true
 ```
 
-La aplicacion tambien trae valores por defecto equivalentes en `application.properties`, por lo que puede correr localmente contra PostgreSQL 17.6 instalado en Windows sin crear un `.env` obligatorio.
+`application.properties` lee estas variables de entorno y trae defaults seguros para desarrollo. El password por defecto es vacio; si tu PostgreSQL local usa password, define `SPRING_DATASOURCE_PASSWORD` en tu terminal, IDE o entorno de ejecucion.
 
 ### PostgreSQL Local En Windows
 
@@ -74,6 +80,19 @@ Configuracion esperada:
 - Base de datos: `nexora_db`
 - Usuario: `nexora_user`
 - Password: `nexora_password`
+
+En desarrollo local se usa `SPRING_JPA_HIBERNATE_DDL_AUTO=update` para que Hibernate pueda crear o ajustar tablas durante el MVP.
+
+Ejemplo en PowerShell:
+
+```powershell
+$env:SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:5432/nexora_db"
+$env:SPRING_DATASOURCE_USERNAME="nexora_user"
+$env:SPRING_DATASOURCE_PASSWORD="nexora_password"
+$env:SPRING_JPA_HIBERNATE_DDL_AUTO="update"
+$env:SPRING_JPA_SHOW_SQL="true"
+.\mvnw.cmd spring-boot:run
+```
 
 ### Docker Compose Opcional
 
@@ -90,6 +109,49 @@ Esto levanta PostgreSQL 17.6 con:
 - Password: `nexora_password`
 - Puerto: `5432:5432`
 
+## Despliegue En Render Con Neon
+
+Render debe ejecutar el backend como Web Service con Java 21. La aplicacion escucha en `0.0.0.0` y toma el puerto desde `PORT`:
+
+```properties
+server.port=${PORT:8080}
+server.address=0.0.0.0
+```
+
+Variables recomendadas en Render:
+
+```env
+PORT=10000
+SPRING_DATASOURCE_URL=jdbc:postgresql://TU_HOST_NEON/TU_DATABASE?sslmode=require
+SPRING_DATASOURCE_USERNAME=TU_USER_NEON
+SPRING_DATASOURCE_PASSWORD=TU_PASSWORD_NEON
+SPRING_JPA_HIBERNATE_DDL_AUTO=validate
+SPRING_JPA_SHOW_SQL=false
+```
+
+Neon entrega una connection string PostgreSQL. Para Spring Boot debe quedar en formato JDBC:
+
+```text
+jdbc:postgresql://HOST/DATABASE?sslmode=require
+```
+
+Neon requiere SSL/TLS; por eso la URL debe incluir normalmente `sslmode=require`.
+
+En produccion usa `SPRING_JPA_HIBERNATE_DDL_AUTO=validate`, no `update`. Con `validate`, Hibernate solo valida el esquema: las tablas deben existir previamente en Neon antes de arrancar la aplicacion.
+
+Las credenciales reales de Neon deben configurarse solo en Environment Variables de Render. No deben guardarse en `.env.example`, `application.properties`, README ni ningun archivo versionado.
+
+### Dockerfile Para Render
+
+El Dockerfile disponible en `backend/Dockerfile` usa Java 21:
+
+```dockerfile
+FROM maven:3.9.9-eclipse-temurin-21 AS build
+FROM eclipse-temurin:21-jre
+```
+
+El Dockerfile expone `8080`, pero el puerto real lo decide Render mediante la variable `PORT`, que Spring Boot lee desde `application.properties`. No hay credenciales hardcodeadas en la imagen.
+
 ### Compilar
 
 ```bash
@@ -102,7 +164,99 @@ mvn compile
 mvn test
 ```
 
-Los tests usan H2 en memoria por scope `test`.
+Los tests usan H2 en memoria por scope `test`. No usan Docker, Neon ni Testcontainers.
+
+Configuracion de tests:
+
+```properties
+spring.datasource.url=jdbc:h2:mem:nexora_test_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+spring.datasource.driver-class-name=org.h2.Driver
+spring.datasource.username=sa
+spring.datasource.password=
+spring.jpa.hibernate.ddl-auto=create-drop
+spring.jpa.show-sql=false
+spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+```
+
+La configuracion vive en:
+
+```text
+src/test/resources/application.properties
+```
+
+## Testing
+
+El proyecto incluye una capa de testing para validar smoke test, services, controllers y persistencia basica.
+
+### Smoke test
+
+- `NexoraBackendApplicationTests`
+
+Valida que el contexto Spring Boot cargue correctamente usando la configuracion de test.
+
+### Unit tests de services
+
+Usan JUnit 5 y Mockito con `@ExtendWith(MockitoExtension.class)`, `@Mock` para repositories y `@InjectMocks` para services.
+
+Tests incluidos:
+
+- `ProveedorServiceTest`
+- `UsuarioServiceTest`
+- `SolicitudCompraServiceTest`
+- `CotizacionServiceTest`
+- `OrdenCompraServiceTest`
+
+Cobertura principal:
+
+- Creacion de proveedor y usuario.
+- Busqueda por ID existente e inexistente.
+- Excepciones `ResourceNotFoundException`.
+- Creacion de solicitud asociada a usuario existente.
+- Fallo si el usuario solicitante no existe.
+- Creacion de cotizacion con solicitud y proveedor existentes.
+- Fallo si falta solicitud o proveedor.
+- Creacion de orden de compra con cotizacion ganadora valida.
+- Validacion de que la cotizacion ganadora pertenece a la solicitud indicada.
+
+### Tests MVC de controllers
+
+Usan `@WebMvcTest`, `MockMvc` y mocks del service layer. En Spring Boot 4 se usa `@MockitoBean` para registrar mocks en el contexto de test MVC.
+
+Tests incluidos:
+
+- `HealthControllerTest`
+- `ProveedorControllerTest`
+
+Cobertura principal:
+
+- `GET /api/health` devuelve `200 OK`.
+- `GET /api/proveedores` devuelve `200 OK`.
+- `POST /api/proveedores` con payload valido devuelve `201 CREATED`.
+- `POST /api/proveedores` con payload invalido devuelve `400 BAD REQUEST`.
+
+### Tests JPA de repositories
+
+Usan `@DataJpaTest` con H2 en memoria.
+
+Tests incluidos:
+
+- `ProveedorRepositoryTest`
+- `UsuarioRepositoryTest`
+
+Cobertura principal:
+
+- Guardar entidad.
+- Buscar por ID.
+- Validar unicidad de `Usuario.email`.
+- Validar unicidad de `Proveedor.email`.
+- Validar unicidad de `Proveedor.rut`.
+
+### Resultado esperado
+
+```text
+Tests run: 24, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
 
 ### Ejecutar la API
 
@@ -122,6 +276,18 @@ Health check:
 GET http://localhost:8080/api/health
 ```
 
+Swagger UI:
+
+```text
+GET http://localhost:8080/swagger-ui.html
+```
+
+OpenAPI JSON:
+
+```text
+GET http://localhost:8080/v3/api-docs
+```
+
 ## Endpoints
 
 ### Health
@@ -130,7 +296,7 @@ GET http://localhost:8080/api/health
 
 ### Usuarios
 
-- `GET /api/usuarios`
+- `GET /api/usuarios?page=0&size=20`
 - `GET /api/usuarios/{id}`
 - `POST /api/usuarios`
 - `PUT /api/usuarios/{id}`
@@ -145,7 +311,7 @@ Campos relevantes:
 
 ### Proveedores
 
-- `GET /api/proveedores`
+- `GET /api/proveedores?page=0&size=20`
 - `GET /api/proveedores/{id}`
 - `POST /api/proveedores`
 - `PUT /api/proveedores/{id}`
@@ -165,7 +331,7 @@ Campos relevantes:
 
 ### Solicitudes de compra
 
-- `GET /api/solicitudes-compra`
+- `GET /api/solicitudes-compra?page=0&size=20`
 - `GET /api/solicitudes-compra/{id}`
 - `POST /api/solicitudes-compra`
 - `PUT /api/solicitudes-compra/{id}`
@@ -183,7 +349,7 @@ Campos relevantes:
 
 ### Cotizaciones
 
-- `GET /api/cotizaciones`
+- `GET /api/cotizaciones?page=0&size=20`
 - `GET /api/cotizaciones/{id}`
 - `POST /api/cotizaciones`
 - `PUT /api/cotizaciones/{id}`
@@ -216,7 +382,7 @@ Campos relevantes:
 
 ### Ordenes de compra
 
-- `GET /api/ordenes-compra`
+- `GET /api/ordenes-compra?page=0&size=20`
 - `GET /api/ordenes-compra/{id}`
 - `POST /api/ordenes-compra`
 - `PUT /api/ordenes-compra/{id}`
@@ -316,6 +482,8 @@ Incluye:
 - H2 para tests de contexto.
 - Validaciones de entrada con Jakarta Validation.
 - Mappers para evitar exponer entidades JPA directamente.
+- Paginacion y filtros en listados principales.
+- Configuracion preparada para Render con Neon PostgreSQL via variables de entorno.
 
 No incluye todavia:
 
@@ -323,5 +491,3 @@ No incluye todavia:
 - Login o autenticacion.
 - Migraciones Flyway/Liquibase.
 - CRUD completo para errores de pipeline y KPI.
-- Reglas avanzadas de transicion de estados.
-- Paginacion y filtros.
