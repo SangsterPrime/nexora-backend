@@ -153,6 +153,10 @@ Las credenciales reales de Neon deben configurarse solo en Environment Variables
 - Exito: `https://nexora-fronted.vercel.app/app`
 - Error: `https://nexora-fronted.vercel.app/login?error=oauth`
 
+Para compatibilidad con OAuth2 y cookies entre Vercel y Render, la aplicacion usa cookies de sesion `SameSite=None`, `Secure=true` y `server.forward-headers-strategy=framework`. En algunos navegadores moviles, especialmente iPhone/Safari, las cookies cross-site pueden ser mas restrictivas. Si el login movil falla aunque escritorio funcione, probar Chrome movil o desactivar temporalmente `Impedir seguimiento entre sitios` en Safari.
+
+Solucion ideal futura: usar dominio propio compartido, por ejemplo `https://nexora.cl` para frontend y `https://api.nexora.cl` para backend. Eso mejora la compatibilidad de cookies frente a dominios separados `vercel.app` y `onrender.com`.
+
 ### Dockerfile Para Render
 
 El Dockerfile disponible en `backend/Dockerfile` usa Java 21:
