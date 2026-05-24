@@ -16,7 +16,9 @@ public class CorsConfig {
 
     private static final String[] LOCAL_DEV_ORIGINS = {
             "http://localhost:5173",
-            "http://127.0.0.1:5173"
+            "http://127.0.0.1:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000"
     };
 
     private static final String[] ALLOWED_METHODS = {
@@ -29,7 +31,7 @@ public class CorsConfig {
 
     private static final String PROD_FRONTEND_ORIGIN = "https://nexora-fronted.vercel.app";
 
-    @Value("${frontend.url:http://localhost:5173}")
+    @Value("${FRONTEND_URL:${frontend.url:http://localhost:5173}}")
     private String frontendUrl;
 
     @Bean
@@ -38,7 +40,9 @@ public class CorsConfig {
         configuration.setAllowedOrigins(allowedOrigins());
         configuration.setAllowedMethods(List.of(ALLOWED_METHODS));
         configuration.setAllowedHeaders(List.of("*"));
+        configuration.setExposedHeaders(List.of("Location"));
         configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

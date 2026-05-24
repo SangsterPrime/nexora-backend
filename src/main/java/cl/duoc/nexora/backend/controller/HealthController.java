@@ -11,6 +11,6 @@ public class HealthController {
 
     @GetMapping("/health")
     public HealthResponse health() {
-        return new HealthResponse("UP");
+        return new HealthResponse("ok", "nexora-backend");
     }
 }

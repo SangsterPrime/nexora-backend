@@ -23,6 +23,12 @@ class SecurityConfigTest {
     }
 
     @Test
+    void dbTestPermanecePublicoParaPrueba() throws Exception {
+        mockMvc.perform(get("/db-test"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void proveedoresRequiereAutenticacion() throws Exception {
         mockMvc.perform(get("/api/proveedores"))
                 .andExpect(status().isUnauthorized());

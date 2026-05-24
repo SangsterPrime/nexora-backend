@@ -61,6 +61,7 @@ DB_URL=jdbc:postgresql://HOST/neondb?sslmode=require&channelBinding=require
 DB_USER=neondb_owner
 DB_PASS=tu_password_aqui
 PORT=8080
+FRONTEND_URL=http://localhost:5173
 ```
 
 `application.properties` lee estas variables de entorno:
@@ -68,6 +69,7 @@ PORT=8080
 - `DB_URL`
 - `DB_USER`
 - `DB_PASS`
+- `FRONTEND_URL`
 - `PORT`
 
 `DB_URL` debe usar formato JDBC, no el formato `postgresql://` entregado originalmente por Neon.
@@ -124,6 +126,7 @@ En Render configura manualmente estas variables en Environment:
 DB_URL=jdbc:postgresql://HOST/neondb?sslmode=require&channelBinding=require
 DB_USER=neondb_owner
 DB_PASS=tu_password_aqui
+FRONTEND_URL=https://nexora-fronted.vercel.app
 PORT=10000
 ```
 
@@ -136,6 +139,8 @@ jdbc:postgresql://HOST/neondb?sslmode=require&channelBinding=require
 Neon requiere SSL/TLS; por eso la URL debe incluir normalmente `sslmode=require`.
 
 Las credenciales reales de Neon deben configurarse solo en Environment Variables de Render o en `.env` local. No deben guardarse en `.env.example`, `application.properties`, README ni ningun archivo versionado.
+
+`FRONTEND_URL` no es una credencial. Se usa para CORS y para redirigir a `/app` despues de un login OAuth2 exitoso.
 
 ### Dockerfile Para Render
 
@@ -250,7 +255,7 @@ Cobertura principal:
 ### Resultado esperado
 
 ```text
-Tests run: 24, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 27, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -272,6 +277,12 @@ Health check:
 GET http://localhost:8080/api/health
 ```
 
+Prueba de conexión a base de datos:
+
+```text
+GET http://localhost:8080/db-test
+```
+
 Swagger UI:
 
 ```text
@@ -289,6 +300,19 @@ GET http://localhost:8080/v3/api-docs
 ### Health
 
 - `GET /api/health`
+
+Respuesta esperada:
+
+```json
+{
+  "status": "ok",
+  "service": "nexora-backend"
+}
+```
+
+### DB test
+
+- `GET /db-test`
 
 ### Usuarios
 

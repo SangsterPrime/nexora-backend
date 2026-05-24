@@ -18,7 +18,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
     private final OAuth2UsuarioService oAuth2UsuarioService;
 
-    @Value("${frontend.url:http://localhost:5173}")
+    @Value("${FRONTEND_URL:${frontend.url:http://localhost:5173}}")
     private String frontendUrl;
 
     @Override

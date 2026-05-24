@@ -25,12 +25,19 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/",
                                 "/api/health",
+                                "/db-test",
                                 "/actuator/health",
+                                "/swagger-ui.html",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"
+                        ).permitAll()
+                        .requestMatchers(
+                                "/oauth2/**",
+                                "/login/oauth2/**"
                         ).permitAll()
                         .requestMatchers(
                                 "/api/proveedores/**",
@@ -40,9 +47,10 @@ public class SecurityConfig {
                                 "/api/ordenes-compra/**",
                                 "/api/pipelines/**",
                                 "/api/pipeline-ejecuciones/**",
-                                "/api/auth/me"
+                                "/api/auth/me",
+                                "/api/auth/logout"
                         ).authenticated()
-                        .anyRequest().permitAll()
+                        .anyRequest().authenticated()
                 )
                 .exceptionHandling(exception -> exception.authenticationEntryPoint((request, response, authException) ->
                         response.sendError(HttpServletResponse.SC_UNAUTHORIZED)));

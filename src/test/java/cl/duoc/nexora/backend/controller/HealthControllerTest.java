@@ -30,6 +30,7 @@ class HealthControllerTest {
     void healthDevuelveOk() throws Exception {
         mockMvc.perform(get("/api/health"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("UP"));
+                .andExpect(jsonPath("$.status").value("ok"))
+                .andExpect(jsonPath("$.service").value("nexora-backend"));
     }
 }
