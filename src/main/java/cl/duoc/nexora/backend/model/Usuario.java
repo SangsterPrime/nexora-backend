@@ -1,5 +1,6 @@
 package cl.duoc.nexora.backend.model;
 
+import cl.duoc.nexora.backend.enums.AuthProvider;
 import cl.duoc.nexora.backend.enums.RolUsuario;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -45,13 +46,23 @@ public class Usuario {
     @Column(nullable = false)
     private Boolean activo;
 
-    @Column(nullable = false, updatable = false)
-    @CreationTimestamp
-    private LocalDateTime creadoEn;
+    @Enumerated(EnumType.STRING)
+    @Column(length = 30)
+    private AuthProvider provider;
 
-    @Column(nullable = false)
+    @Column(length = 120)
+    private String providerId;
+
+    @Column(length = 500)
+    private String fotoUrl;
+
+    @Column(name = "creado_en", nullable = false, updatable = false)
+    @CreationTimestamp
+    private LocalDateTime createdAt;
+
+    @Column(name = "actualizado_en", nullable = false)
     @UpdateTimestamp
-    private LocalDateTime actualizadoEn;
+    private LocalDateTime updatedAt;
 
     @PrePersist
     void prePersist() {
@@ -61,6 +72,14 @@ public class Usuario {
         if (activo == null) {
             activo = Boolean.TRUE;
         }
+    }
+
+    public LocalDateTime getCreadoEn() {
+        return createdAt;
+    }
+
+    public LocalDateTime getActualizadoEn() {
+        return updatedAt;
     }
 
 }

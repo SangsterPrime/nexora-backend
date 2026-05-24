@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Run Nexora Backend",
+      "request": "launch",
+      "mainClass": "cl.duoc.nexora.backend.NexoraBackendApplication",
+      "projectName": "nexora-backend",
+      "envFile": "${workspaceFolder}/.env"
+    }
+  ]
+}

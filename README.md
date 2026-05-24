@@ -52,45 +52,46 @@ Entidades principales:
 - PostgreSQL 17.6 instalado localmente en Windows
 - Docker y Docker Compose solo si quieres usar el entorno alternativo opcional
 
-### Variables de entorno
+## Configuración de variables de entorno
 
-El proyecto incluye `.env.example` con valores locales sugeridos para PostgreSQL 17.6:
+Para desarrollo local crea un archivo `.env` en la raiz del proyecto basado en `.env.example`. El archivo `.env` esta ignorado por Git y no debe subirse a GitHub.
 
 ```env
+DB_URL=jdbc:postgresql://HOST/neondb?sslmode=require&channelBinding=require
+DB_USER=neondb_owner
+DB_PASS=tu_password_aqui
 PORT=8080
-
-SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/nexora_db
-SPRING_DATASOURCE_USERNAME=nexora_user
-SPRING_DATASOURCE_PASSWORD=nexora_password
-
-SPRING_JPA_HIBERNATE_DDL_AUTO=update
-SPRING_JPA_SHOW_SQL=true
 ```
 
-`application.properties` lee estas variables de entorno y trae defaults seguros para desarrollo. El password por defecto es vacio; si tu PostgreSQL local usa password, define `SPRING_DATASOURCE_PASSWORD` en tu terminal, IDE o entorno de ejecucion.
+`application.properties` lee estas variables de entorno:
 
-### PostgreSQL Local En Windows
+- `DB_URL`
+- `DB_USER`
+- `DB_PASS`
+- `PORT`
 
-El entorno local principal usa PostgreSQL 17.6 instalado en Windows, no Docker.
+`DB_URL` debe usar formato JDBC, no el formato `postgresql://` entregado originalmente por Neon.
+
+### Neon Local En Windows
+
+El entorno local principal usa Neon PostgreSQL mediante variables de entorno, no credenciales hardcodeadas.
 
 Configuracion esperada:
 
-- Host: `localhost`
-- Puerto: `5432`
-- Base de datos: `nexora_db`
-- Usuario: `nexora_user`
-- Password: `nexora_password`
+- URL JDBC en `DB_URL`
+- Usuario en `DB_USER`
+- Password en `DB_PASS`
+- Puerto de la aplicacion en `PORT`
 
-En desarrollo local se usa `SPRING_JPA_HIBERNATE_DDL_AUTO=update` para que Hibernate pueda crear o ajustar tablas durante el MVP.
+En desarrollo local se usa `spring.jpa.hibernate.ddl-auto=update` para que Hibernate pueda crear o ajustar tablas durante el MVP.
 
 Ejemplo en PowerShell:
 
 ```powershell
-$env:SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:5432/nexora_db"
-$env:SPRING_DATASOURCE_USERNAME="nexora_user"
-$env:SPRING_DATASOURCE_PASSWORD="nexora_password"
-$env:SPRING_JPA_HIBERNATE_DDL_AUTO="update"
-$env:SPRING_JPA_SHOW_SQL="true"
+$env:DB_URL="jdbc:postgresql://HOST/neondb?sslmode=require&channelBinding=require"
+$env:DB_USER="neondb_owner"
+$env:DB_PASS="tu_password_aqui"
+$env:PORT="8080"
 .\mvnw.cmd spring-boot:run
 ```
 
@@ -109,37 +110,32 @@ Esto levanta PostgreSQL 17.6 con:
 - Password: `nexora_password`
 - Puerto: `5432:5432`
 
-## Despliegue En Render Con Neon
+## Render
 
-Render debe ejecutar el backend como Web Service con Java 21. La aplicacion escucha en `0.0.0.0` y toma el puerto desde `PORT`:
+Render debe ejecutar el backend como Web Service con Java 21. La aplicacion toma el puerto desde `PORT`:
 
 ```properties
 server.port=${PORT:8080}
-server.address=0.0.0.0
 ```
 
-Variables recomendadas en Render:
+En Render configura manualmente estas variables en Environment:
 
 ```env
+DB_URL=jdbc:postgresql://HOST/neondb?sslmode=require&channelBinding=require
+DB_USER=neondb_owner
+DB_PASS=tu_password_aqui
 PORT=10000
-SPRING_DATASOURCE_URL=jdbc:postgresql://TU_HOST_NEON/TU_DATABASE?sslmode=require
-SPRING_DATASOURCE_USERNAME=TU_USER_NEON
-SPRING_DATASOURCE_PASSWORD=TU_PASSWORD_NEON
-SPRING_JPA_HIBERNATE_DDL_AUTO=validate
-SPRING_JPA_SHOW_SQL=false
 ```
 
 Neon entrega una connection string PostgreSQL. Para Spring Boot debe quedar en formato JDBC:
 
 ```text
-jdbc:postgresql://HOST/DATABASE?sslmode=require
+jdbc:postgresql://HOST/neondb?sslmode=require&channelBinding=require
 ```
 
 Neon requiere SSL/TLS; por eso la URL debe incluir normalmente `sslmode=require`.
 
-En produccion usa `SPRING_JPA_HIBERNATE_DDL_AUTO=validate`, no `update`. Con `validate`, Hibernate solo valida el esquema: las tablas deben existir previamente en Neon antes de arrancar la aplicacion.
-
-Las credenciales reales de Neon deben configurarse solo en Environment Variables de Render. No deben guardarse en `.env.example`, `application.properties`, README ni ningun archivo versionado.
+Las credenciales reales de Neon deben configurarse solo en Environment Variables de Render o en `.env` local. No deben guardarse en `.env.example`, `application.properties`, README ni ningun archivo versionado.
 
 ### Dockerfile Para Render
 

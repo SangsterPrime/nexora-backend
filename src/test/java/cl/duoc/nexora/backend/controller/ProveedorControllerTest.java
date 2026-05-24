@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import cl.duoc.nexora.backend.dto.request.ProveedorRequest;
 import cl.duoc.nexora.backend.dto.response.ProveedorResponse;
+import cl.duoc.nexora.backend.config.SecurityConfig;
 import cl.duoc.nexora.backend.enums.EstadoProveedor;
 import cl.duoc.nexora.backend.service.ProveedorService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,7 +18,12 @@ import java.math.BigDecimal;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.security.oauth2.client.autoconfigure.OAuth2ClientAutoConfiguration;
+import org.springframework.boot.security.oauth2.client.autoconfigure.servlet.OAuth2ClientWebSecurityAutoConfiguration;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.ComponentScan.Filter;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
@@ -25,7 +31,12 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(ProveedorController.class)
+@WebMvcTest(
+        value = ProveedorController.class,
+        excludeAutoConfiguration = {OAuth2ClientAutoConfiguration.class, OAuth2ClientWebSecurityAutoConfiguration.class},
+        excludeFilters = @Filter(type = FilterType.ASSIGNABLE_TYPE, classes = SecurityConfig.class)
+)
+@AutoConfigureMockMvc(addFilters = false)
 class ProveedorControllerTest {
 
     @Autowired
