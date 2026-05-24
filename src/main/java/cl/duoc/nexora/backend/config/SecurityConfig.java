@@ -3,6 +3,7 @@ package cl.duoc.nexora.backend.config;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -18,6 +19,12 @@ public class SecurityConfig {
 
     private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
     private final ObjectProvider<ClientRegistrationRepository> clientRegistrationRepository;
+
+    @Value("${FRONTEND_URL:${frontend.url:http://localhost:5173}}")
+    private String frontendUrl;
+
+    @Value("${OAUTH2_FAILURE_REDIRECT_URL:}")
+    private String failureRedirectUrl;
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -37,7 +44,9 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers(
                                 "/oauth2/**",
-                                "/login/oauth2/**"
+                                "/login/oauth2/**",
+                                "/api/auth/me",
+                                "/api/auth/logout"
                         ).permitAll()
                         .requestMatchers(
                                 "/api/proveedores/**",
@@ -46,9 +55,7 @@ public class SecurityConfig {
                                 "/api/negociaciones/**",
                                 "/api/ordenes-compra/**",
                                 "/api/pipelines/**",
-                                "/api/pipeline-ejecuciones/**",
-                                "/api/auth/me",
-                                "/api/auth/logout"
+                                "/api/pipeline-ejecuciones/**"
                         ).authenticated()
                         .anyRequest().authenticated()
                 )
@@ -56,9 +63,23 @@ public class SecurityConfig {
                         response.sendError(HttpServletResponse.SC_UNAUTHORIZED)));
 
         if (clientRegistrationRepository.getIfAvailable() != null) {
-            http.oauth2Login(oauth2 -> oauth2.successHandler(oAuth2LoginSuccessHandler));
+            http.oauth2Login(oauth2 -> oauth2
+                    .successHandler(oAuth2LoginSuccessHandler)
+                    .failureHandler((request, response, exception) -> response.sendRedirect(oauth2FailureRedirectUrl()))
+            );
         }
 
         return http.build();
+    }
+
+    private String oauth2FailureRedirectUrl() {
+        if (failureRedirectUrl != null && !failureRedirectUrl.isBlank()) {
+            return failureRedirectUrl;
+        }
+
+        String baseUrl = frontendUrl.endsWith("/")
+                ? frontendUrl.substring(0, frontendUrl.length() - 1)
+                : frontendUrl;
+        return baseUrl + "/login?error=oauth";
     }
 }

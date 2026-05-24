@@ -21,6 +21,9 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     @Value("${FRONTEND_URL:${frontend.url:http://localhost:5173}}")
     private String frontendUrl;
 
+    @Value("${OAUTH2_SUCCESS_REDIRECT_URL:}")
+    private String successRedirectUrl;
+
     @Override
     public void onAuthenticationSuccess(
             HttpServletRequest request,
@@ -34,6 +37,10 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     }
 
     private String appRedirectUrl() {
+        if (successRedirectUrl != null && !successRedirectUrl.isBlank()) {
+            return successRedirectUrl;
+        }
+
         String baseUrl = frontendUrl.endsWith("/")
                 ? frontendUrl.substring(0, frontendUrl.length() - 1)
                 : frontendUrl;

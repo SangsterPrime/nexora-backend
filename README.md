@@ -62,6 +62,8 @@ DB_USER=neondb_owner
 DB_PASS=tu_password_aqui
 PORT=8080
 FRONTEND_URL=http://localhost:5173
+OAUTH2_SUCCESS_REDIRECT_URL=http://localhost:5173/app
+OAUTH2_FAILURE_REDIRECT_URL=http://localhost:5173/login?error=oauth
 ```
 
 `application.properties` lee estas variables de entorno:
@@ -70,6 +72,8 @@ FRONTEND_URL=http://localhost:5173
 - `DB_USER`
 - `DB_PASS`
 - `FRONTEND_URL`
+- `OAUTH2_SUCCESS_REDIRECT_URL`
+- `OAUTH2_FAILURE_REDIRECT_URL`
 - `PORT`
 
 `DB_URL` debe usar formato JDBC, no el formato `postgresql://` entregado originalmente por Neon.
@@ -127,6 +131,8 @@ DB_URL=jdbc:postgresql://HOST/neondb?sslmode=require&channelBinding=require
 DB_USER=neondb_owner
 DB_PASS=tu_password_aqui
 FRONTEND_URL=https://nexora-fronted.vercel.app
+OAUTH2_SUCCESS_REDIRECT_URL=https://nexora-fronted.vercel.app/app
+OAUTH2_FAILURE_REDIRECT_URL=https://nexora-fronted.vercel.app/login?error=oauth
 PORT=10000
 ```
 
@@ -140,7 +146,12 @@ Neon requiere SSL/TLS; por eso la URL debe incluir normalmente `sslmode=require`
 
 Las credenciales reales de Neon deben configurarse solo en Environment Variables de Render o en `.env` local. No deben guardarse en `.env.example`, `application.properties`, README ni ningun archivo versionado.
 
-`FRONTEND_URL` no es una credencial. Se usa para CORS y para redirigir a `/app` despues de un login OAuth2 exitoso.
+`FRONTEND_URL` no es una credencial. Se usa para CORS y como base de redireccion si no defines URLs OAuth2 explicitas.
+
+`OAUTH2_SUCCESS_REDIRECT_URL` y `OAUTH2_FAILURE_REDIRECT_URL` permiten controlar el destino final del flujo Google OAuth2:
+
+- Exito: `https://nexora-fronted.vercel.app/app`
+- Error: `https://nexora-fronted.vercel.app/login?error=oauth`
 
 ### Dockerfile Para Render
 
