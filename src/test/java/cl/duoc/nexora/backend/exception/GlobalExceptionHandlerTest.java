@@ -2,8 +2,11 @@ package cl.duoc.nexora.backend.exception;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.containsString;
 
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ConstraintViolation;
@@ -61,6 +64,8 @@ class GlobalExceptionHandlerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.mensaje").value("Datos invalidos"))
+                .andExpect(jsonPath("$.path").value("/test-errors/constraint"))
+                .andExpect(jsonPath("$.timestamp").exists())
                 .andExpect(jsonPath("$.errores.codigo").value("Codigo invalido"));
     }
 
@@ -69,7 +74,9 @@ class GlobalExceptionHandlerTest {
         mockMvc.perform(get("/test-errors/not-found"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
-                .andExpect(jsonPath("$.mensaje").value("Entidad no encontrada"));
+                .andExpect(jsonPath("$.mensaje").value("Entidad no encontrada"))
+                .andExpect(jsonPath("$.path").value("/test-errors/not-found"))
+                .andExpect(jsonPath("$.timestamp").exists());
     }
 
     @Test
@@ -77,7 +84,10 @@ class GlobalExceptionHandlerTest {
         mockMvc.perform(get("/test-errors/data-integrity"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409))
-                .andExpect(jsonPath("$.mensaje").value("No se pudo completar la operacion por una restriccion de datos"));
+                .andExpect(jsonPath("$.mensaje").value("No se pudo completar la operacion por una restriccion de datos"))
+                .andExpect(jsonPath("$.path").value("/test-errors/data-integrity"))
+                .andExpect(jsonPath("$.timestamp").exists())
+                .andExpect(content().string(not(containsString("duplicate key"))));
     }
 
     @Test
@@ -85,7 +95,9 @@ class GlobalExceptionHandlerTest {
         mockMvc.perform(get("/test-errors/authentication"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.status").value(401))
-                .andExpect(jsonPath("$.mensaje").value("No autenticado"));
+                .andExpect(jsonPath("$.mensaje").value("No autenticado"))
+                .andExpect(jsonPath("$.path").value("/test-errors/authentication"))
+                .andExpect(jsonPath("$.timestamp").exists());
     }
 
     @Test
@@ -93,7 +105,9 @@ class GlobalExceptionHandlerTest {
         mockMvc.perform(get("/test-errors/access-denied"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.status").value(403))
-                .andExpect(jsonPath("$.mensaje").value("Acceso denegado"));
+                .andExpect(jsonPath("$.mensaje").value("Acceso denegado"))
+                .andExpect(jsonPath("$.path").value("/test-errors/access-denied"))
+                .andExpect(jsonPath("$.timestamp").exists());
     }
 
     @Test
@@ -101,7 +115,10 @@ class GlobalExceptionHandlerTest {
         mockMvc.perform(get("/test-errors/generic"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.status").value(500))
-                .andExpect(jsonPath("$.mensaje").value("Error interno del servidor"));
+                .andExpect(jsonPath("$.mensaje").value("Error interno del servidor"))
+                .andExpect(jsonPath("$.path").value("/test-errors/generic"))
+                .andExpect(jsonPath("$.timestamp").exists())
+                .andExpect(content().string(not(containsString("detalle interno sensible"))));
     }
 
     @RestController
