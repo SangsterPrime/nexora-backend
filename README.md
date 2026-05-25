@@ -133,6 +133,7 @@ DB_PASS=tu_password_aqui
 FRONTEND_URL=https://nexora-fronted.vercel.app
 OAUTH2_SUCCESS_REDIRECT_URL=https://nexora-fronted.vercel.app/app
 OAUTH2_FAILURE_REDIRECT_URL=https://nexora-fronted.vercel.app/login?error=oauth
+GOOGLE_OAUTH_REDIRECT_URI=https://nexora-fronted.vercel.app/login/oauth2/code/google
 PORT=10000
 ```
 
@@ -152,6 +153,19 @@ Las credenciales reales de Neon deben configurarse solo en Environment Variables
 
 - Exito: `https://nexora-fronted.vercel.app/app`
 - Error: `https://nexora-fronted.vercel.app/login?error=oauth`
+
+`GOOGLE_OAUTH_REDIRECT_URI` permite que Google vuelva por el dominio de Vercel y Vercel proxyee `/login/oauth2/code/google` al backend Render:
+
+```env
+GOOGLE_OAUTH_REDIRECT_URI=https://nexora-fronted.vercel.app/login/oauth2/code/google
+```
+
+En Google Cloud Console agrega estas redirect URI autorizadas:
+
+```text
+https://nexora-fronted.vercel.app/login/oauth2/code/google
+https://nexora-backend-nb85.onrender.com/login/oauth2/code/google
+```
 
 Para compatibilidad con OAuth2 y cookies entre Vercel y Render, la aplicacion usa cookies de sesion `SameSite=None`, `Secure=true` y `server.forward-headers-strategy=framework`. En algunos navegadores moviles, especialmente iPhone/Safari, las cookies cross-site pueden ser mas restrictivas. Si el login movil falla aunque escritorio funcione, probar Chrome movil o desactivar temporalmente `Impedir seguimiento entre sitios` en Safari.
 
