@@ -43,6 +43,18 @@ Entidades principales:
 - Spring Boot Actuator
 - Springdoc OpenAPI / Swagger UI
 
+## Autor
+
+NEXORA fue desarrollado por Joel Sangster como proyecto académico/fullstack, integrando React, Vite, Spring Boot, PostgreSQL Neon, Render, Vercel y Google OAuth2.
+
+## Notas técnicas
+
+- Frontend desplegado en Vercel.
+- Backend desplegado en Render.
+- Base de datos en Neon PostgreSQL.
+- Login mediante Google OAuth2.
+- Vercel usa rewrites como proxy hacia Render para mejorar compatibilidad de sesión.
+
 ## Como correrlo
 
 ### Requisitos

@@ -18,7 +18,14 @@
 		<license/>
 	</licenses>
 	<developers>
-		<developer/>
+		<developer>
+			<name>Joel Sangster</name>
+			<email>jo.sangster@duocuc.cl</email>
+			<roles>
+				<role>Backend Developer</role>
+				<role>Fullstack Developer</role>
+			</roles>
+		</developer>
 	</developers>
 	<scm>
 		<connection/>
