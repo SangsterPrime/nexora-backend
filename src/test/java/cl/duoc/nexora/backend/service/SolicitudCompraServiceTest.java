@@ -1,11 +1,13 @@
 package cl.duoc.nexora.backend.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import cl.duoc.nexora.backend.dto.integration.N8nEventRequest;
 import cl.duoc.nexora.backend.dto.request.SolicitudCompraRequest;
 import cl.duoc.nexora.backend.dto.response.SolicitudCompraResponse;
 import cl.duoc.nexora.backend.enums.EstadoSolicitudCompra;
@@ -32,6 +34,9 @@ class SolicitudCompraServiceTest {
 
     @Mock
     private UsuarioRepository usuarioRepository;
+
+    @Mock
+    private N8nIntegrationService n8nIntegrationService;
 
     @InjectMocks
     private SolicitudCompraService solicitudCompraService;
@@ -60,6 +65,28 @@ class SolicitudCompraServiceTest {
         when(usuarioRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> solicitudCompraService.crear(solicitudRequest(99L)));
+    }
+
+    @Test
+    void crearSolicitudNoFallaAunqueN8nEsteCalido() {
+        // Dado que n8n lanza excepción, la solicitud debe crearse igualmente
+        Usuario usuario = usuario(1L);
+        SolicitudCompraRequest request = solicitudRequest(1L);
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        when(solicitudCompraRepository.save(any(SolicitudCompra.class))).thenAnswer(invocation -> {
+            SolicitudCompra solicitud = invocation.getArgument(0);
+            solicitud.setId(20L);
+            return solicitud;
+        });
+        when(n8nIntegrationService.enviarEvento(any(N8nEventRequest.class)))
+                .thenThrow(new RuntimeException("n8n caído — conexión rechazada"));
+
+        // No debe lanzar excepción
+        SolicitudCompraResponse response = solicitudCompraService.crear(request);
+
+        assertNotNull(response);
+        assertEquals(20L, response.id());
+        verify(solicitudCompraRepository).save(any(SolicitudCompra.class));
     }
 
     private SolicitudCompraRequest solicitudRequest(Long usuarioId) {

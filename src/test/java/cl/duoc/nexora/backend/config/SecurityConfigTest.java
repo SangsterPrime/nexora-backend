@@ -1,6 +1,7 @@
 package cl.duoc.nexora.backend.config;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
@@ -31,6 +32,12 @@ class SecurityConfigTest {
     @Test
     void proveedoresRequiereAutenticacion() throws Exception {
         mockMvc.perform(get("/api/proveedores"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void integracionN8nTestRequiereAutenticacion() throws Exception {
+        mockMvc.perform(post("/api/integrations/n8n/test"))
                 .andExpect(status().isUnauthorized());
     }
 }

@@ -527,6 +527,71 @@ Responsabilidades por paquete:
 - `exception`: manejo centralizado de errores.
 - `config`: configuraciones futuras del proyecto.
 
+## Integración con n8n
+
+Nexora puede enviar eventos a un workflow de n8n mediante webhook cuando ocurren acciones clave (p. ej. creación de una solicitud de compra).
+
+La integración es **opcional y no bloqueante**: si n8n está caído o desactivado, el flujo de Nexora continúa normalmente.
+
+### Variables de entorno en Render
+
+Agrega estas variables en el panel **Environment** del servicio backend en Render:
+
+```env
+N8N_ENABLED=true
+N8N_WEBHOOK_URL=https://TU-TUNEL.trycloudflare.com/webhook/nexora-solicitud-creada
+N8N_WEBHOOK_SECRET=un_secret_seguro_aqui
+```
+
+### Notas importantes
+
+- Usa la **Production URL** de n8n (no la webhook-test).  
+  En n8n activa el workflow y copia la URL del trigger tipo `POST /webhook/nexora-solicitud-creada`.
+- Si usas **Cloudflare Tunnel temporal** (`trycloudflare.com`), la URL cambia cada vez que reinicias el túnel. Actualiza `N8N_WEBHOOK_URL` en Render cuando cambie.
+- **No subas el secret a GitHub**. Configúralo solo en Render o en `.env` local.
+- n8n debe estar activo/publicado para recibir eventos.
+
+### Endpoint de prueba
+
+```
+POST /api/integrations/n8n/test
+```
+
+Requiere autenticación (sesión Google OAuth2 activa).
+
+Respuestas posibles:
+
+```json
+// n8n desactivado
+{ "ok": false, "message": "Integración n8n desactivada" }
+
+// URL no configurada
+{ "ok": false, "message": "N8N_WEBHOOK_URL no configurada" }
+
+// Éxito
+{ "ok": true,  "message": "Evento de prueba enviado a n8n" }
+
+// n8n caído
+{ "ok": false, "message": "Error al comunicarse con n8n: ..." }
+```
+
+### Eventos disponibles
+
+| Evento                   | Entidad           | Cuándo se dispara                  |
+|--------------------------|-------------------|------------------------------------|
+| `SOLICITUD_COMPRA_CREADA` | `SOLICITUD_COMPRA` | Al crear una nueva solicitud de compra |
+| `NEXORA_TEST`            | `INTEGRACION`     | Al llamar al endpoint de prueba     |
+
+### Header de autenticación enviado a n8n
+
+```
+X-NEXORA-WEBHOOK-SECRET: <valor de N8N_WEBHOOK_SECRET>
+```
+
+En el workflow de n8n agrega un nodo de validación del header antes de procesar el evento.
+
+---
+
 ## Estado del proyecto
 
 Estado actual: MVP backend funcional en desarrollo.

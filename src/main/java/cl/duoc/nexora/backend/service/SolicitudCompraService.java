@@ -1,5 +1,6 @@
 package cl.duoc.nexora.backend.service;
 
+import cl.duoc.nexora.backend.dto.integration.N8nEventRequest;
 import cl.duoc.nexora.backend.dto.request.SolicitudCompraRequest;
 import cl.duoc.nexora.backend.dto.response.SolicitudCompraResponse;
 import cl.duoc.nexora.backend.enums.EstadoSolicitudCompra;
@@ -9,6 +10,9 @@ import cl.duoc.nexora.backend.model.SolicitudCompra;
 import cl.duoc.nexora.backend.model.Usuario;
 import cl.duoc.nexora.backend.repository.SolicitudCompraRepository;
 import cl.duoc.nexora.backend.repository.UsuarioRepository;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -23,6 +27,7 @@ public class SolicitudCompraService {
 
     private final SolicitudCompraRepository solicitudCompraRepository;
     private final UsuarioRepository usuarioRepository;
+    private final N8nIntegrationService n8nIntegrationService;
 
     @Transactional(readOnly = true)
     public Page<SolicitudCompraResponse> listar(
@@ -54,7 +59,17 @@ public class SolicitudCompraService {
         Usuario usuarioSolicitante = buscarUsuarioOpcional(request.usuarioSolicitanteId());
         SolicitudCompra solicitud = SolicitudCompraMapper.toEntity(request, usuarioSolicitante);
         log.info("Creando solicitud de compra para usuario {}", request.usuarioSolicitanteId());
-        return SolicitudCompraMapper.toResponse(solicitudCompraRepository.save(solicitud));
+        SolicitudCompra guardada = solicitudCompraRepository.save(solicitud);
+
+        // Notificar a n8n de forma no bloqueante.
+        // Si n8n está caído o desactivado, la solicitud igual se crea correctamente.
+        try {
+            n8nIntegrationService.enviarEvento(buildEventoCreacion(guardada, usuarioSolicitante));
+        } catch (Exception e) {
+            log.warn("No se pudo notificar a n8n sobre la solicitud {}: {}", guardada.getId(), e.getMessage());
+        }
+
+        return SolicitudCompraMapper.toResponse(guardada);
     }
 
     @Transactional
@@ -95,5 +110,34 @@ public class SolicitudCompraService {
         if (usuarioSolicitanteId != null && !usuarioSolicitanteId.equals(usuarioActualId)) {
             throw new IllegalArgumentException("No se puede cambiar el usuario solicitante de una solicitud existente");
         }
+    }
+
+    /**
+     * Construye el evento n8n para una solicitud recién creada.
+     * Incluye los campos más relevantes sin exponer datos sensibles.
+     */
+    private N8nEventRequest buildEventoCreacion(SolicitudCompra solicitud, Usuario usuario) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("id", solicitud.getId());
+        payload.put("titulo", solicitud.getTitulo());
+        payload.put("estado", solicitud.getEstado() != null ? solicitud.getEstado().name() : null);
+        payload.put("categoria", solicitud.getCategoria());
+        payload.put("montoEstimado", solicitud.getMontoEstimado());
+        payload.put("fechaRequerida", solicitud.getFechaRequerida() != null
+                ? solicitud.getFechaRequerida().toString() : null);
+        payload.put("creadoEn", solicitud.getCreadoEn() != null
+                ? solicitud.getCreadoEn().toString() : null);
+
+        String emailUsuario = usuario != null ? usuario.getEmail() : null;
+
+        return N8nEventRequest.builder()
+                .evento("SOLICITUD_COMPRA_CREADA")
+                .entidad("SOLICITUD_COMPRA")
+                .entidadId(solicitud.getId())
+                .accion("CREATE")
+                .usuarioEmail(emailUsuario)
+                .payload(payload)
+                .timestamp(LocalDateTime.now())
+                .build();
     }
 }
