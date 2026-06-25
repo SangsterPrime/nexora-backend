@@ -88,6 +88,11 @@ OAUTH2_FAILURE_REDIRECT_URL=http://localhost:5173/login?error=oauth
 - `OAUTH2_FAILURE_REDIRECT_URL`
 - `PORT`
 
+También lee, opcionalmente, las variables de las integraciones externas:
+
+- `N8N_ENABLED`, `N8N_WEBHOOK_URL`, `N8N_WEBHOOK_SECRET` (ver [Integración con n8n](#integración-con-n8n))
+- `NEXORA_ML_ENABLED`, `NEXORA_ML_URL`, `NEXORA_ML_API_KEY` (ver [Integración con servicio ML/IA](#integración-con-servicio-mlia-entrenamientoai))
+
 `DB_URL` debe usar formato JDBC, no el formato `postgresql://` entregado originalmente por Neon.
 
 ### Neon Local En Windows
@@ -247,6 +252,9 @@ Tests incluidos:
 - `SolicitudCompraServiceTest`
 - `CotizacionServiceTest`
 - `OrdenCompraServiceTest`
+- `N8nIntegrationServiceTest`
+- `MlServiceTest` (registro de ejecución/KPIs y manejo de fallos en pipeline)
+- `MlServiceClientTest` (cliente HTTP: URL no configurada y servicio inalcanzable)
 
 Cobertura principal:
 
@@ -268,6 +276,8 @@ Tests incluidos:
 
 - `HealthControllerTest`
 - `ProveedorControllerTest`
+- `IntegrationControllerTest`
+- `MlControllerTest`
 
 Cobertura principal:
 
@@ -275,6 +285,8 @@ Cobertura principal:
 - `GET /api/proveedores` devuelve `200 OK`.
 - `POST /api/proveedores` con payload valido devuelve `201 CREATED`.
 - `POST /api/proveedores` con payload invalido devuelve `400 BAD REQUEST`.
+- `GET /api/ml/health` y `GET /api/ml/metrics` devuelven `200 OK` con el mapeo correcto.
+- Un fallo del servicio ML se traduce a `502`; integración desactivada a `503`.
 
 ### Tests JPA de repositories
 
@@ -296,7 +308,7 @@ Cobertura principal:
 ### Resultado esperado
 
 ```text
-Tests run: 27, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 52, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -491,6 +503,16 @@ Campos relevantes:
 - `finalizadoEn`
 - `resumen`
 
+### Servicio ML/IA
+
+- `GET /api/ml/health`
+- `POST /api/ml/train`
+- `POST /api/ml/score`
+- `GET /api/ml/metrics`
+- `GET /api/ml/predictions`
+
+Ver la sección [Integración con servicio ML/IA (EntrenamientoAI)](#integración-con-servicio-mlia-entrenamientoai) para detalles.
+
 ### Actuator
 
 - `GET /actuator/health`
@@ -592,6 +614,96 @@ En el workflow de n8n agrega un nodo de validación del header antes de procesar
 
 ---
 
+## Integración con servicio ML/IA (EntrenamientoAI)
+
+Nexora integra un servicio Python de IA/DataOps (proyecto `EntrenamientoAI`) para entrenar un modelo, scorear registros y exponer métricas y predicciones.
+
+### Arquitectura
+
+```text
+Frontend (Vercel)  →  Backend Spring Boot (Render)  →  Servicio Python ML (EntrenamientoAI)
+   React/Vite            /api/ml/**                       /health /train /score /metrics /predictions
+```
+
+- El **frontend nunca llama directamente** al servicio Python. Siempre pasa por el backend bajo `/api/ml/**`.
+- La **API key del servicio ML vive solo en el backend** (variable `NEXORA_ML_API_KEY`) y se envía al servicio Python en el header `X-API-Key`. Nunca se expone al navegador ni se imprime en logs.
+- Cada `train` y `score` queda registrado como `PipelineEjecucion`. Si falla, se crea un `PipelineError` y la ejecución se marca `FALLIDA`. Las métricas del modelo se guardan como `KpiResultado` (`ML_ACCURACY`, `ML_PRECISION`, `ML_RECALL`, `ML_F1`, `ML_ROC_AUC`, `ML_GINI`).
+- Los pipelines `ML - Entrenamiento` y `ML - Scoring` (tipo `ML`) se crean automáticamente la primera vez que se usan.
+
+### Variables de entorno
+
+`application.properties` lee estas variables de entorno:
+
+- `NEXORA_ML_ENABLED` — activa la integración (default `false`).
+- `NEXORA_ML_URL` — URL base del servicio Python, p. ej. `https://nexora-ml.onrender.com`.
+- `NEXORA_ML_API_KEY` — API key enviada en el header `X-API-Key`. Es secreta.
+
+En Render configúralas en **Environment** del servicio backend:
+
+```env
+NEXORA_ML_ENABLED=true
+NEXORA_ML_URL=https://nexora-ml.onrender.com
+NEXORA_ML_API_KEY=un_api_key_seguro_aqui
+```
+
+**No subas la API key a GitHub.** Configúrala solo en Render o en `.env` local (`.env` está ignorado por Git). El archivo `.env.example` incluye los placeholders.
+
+### Endpoints (fachada del backend)
+
+Todos requieren autenticación (sesión Google OAuth2 activa). Ruta base `/api/ml`:
+
+- `GET /api/ml/health` — estado del servicio Python.
+- `POST /api/ml/train` — dispara entrenamiento (cuerpo opcional). Registra ejecución + KPIs.
+- `POST /api/ml/score` — scorea registros (cuerpo opcional). Registra ejecución.
+- `GET /api/ml/metrics` — métricas del último modelo (`accuracy`, `recall`, `precision`, `f1`, `roc_auc`, `gini`, `matriz_confusion`).
+- `GET /api/ml/predictions` — predicciones/resultados scoreados.
+
+### Manejo de errores
+
+`GlobalExceptionHandler` traduce los fallos del servicio ML a respuestas claras con el formato estándar `ApiErrorResponse`:
+
+```json
+// Integración desactivada o sin configurar (503)
+{ "status": 503, "mensaje": "Integración ML desactivada. Configure NEXORA_ML_ENABLED=true para habilitarla.", "path": "/api/ml/health" }
+
+// URL no configurada (503)
+{ "status": 503, "mensaje": "NEXORA_ML_URL no configurada", "path": "/api/ml/health" }
+
+// Servicio ML caído o con error (502)
+{ "status": 502, "mensaje": "No se pudo conectar con el servicio de IA", "path": "/api/ml/health" }
+{ "status": 502, "mensaje": "El servicio de IA respondió con error 500", "path": "/api/ml/train" }
+```
+
+### Cómo probar localmente
+
+1. Levanta el servicio Python `EntrenamientoAI` (por defecto suele exponerse en `http://localhost:8000`).
+2. Configura el `.env` del backend:
+
+   ```env
+   NEXORA_ML_ENABLED=true
+   NEXORA_ML_URL=http://localhost:8000
+   NEXORA_ML_API_KEY=el_mismo_api_key_del_servicio_python
+   ```
+
+3. Arranca el backend:
+
+   ```powershell
+   $env:JAVA_HOME="C:\Program Files\Java\jdk-21.0.11"
+   .\mvnw.cmd spring-boot:run
+   ```
+
+4. Como los endpoints requieren sesión, inicia sesión con Google OAuth2 desde el frontend y prueba desde ahí, o usa una cookie de sesión válida. Ejemplo de verificación de estado:
+
+   ```text
+   GET http://localhost:8080/api/ml/health
+   ```
+
+   Si `NEXORA_ML_ENABLED=false`, el backend responde `503` con un mensaje claro sin llamar al servicio Python.
+
+> Nota: las métricas guardadas como `KpiResultado` se redondean a 2 decimales (columna `NUMERIC(15,2)`). El valor completo siempre está disponible vía `GET /api/ml/metrics`.
+
+---
+
 ## Estado del proyecto
 
 Estado actual: MVP backend funcional en desarrollo.
@@ -610,6 +722,8 @@ Incluye:
 - Mappers para evitar exponer entidades JPA directamente.
 - Paginacion y filtros en listados principales.
 - Configuracion preparada para Render con Neon PostgreSQL via variables de entorno.
+- Integración opcional con n8n vía webhook.
+- Integración con el servicio Python de IA (EntrenamientoAI) vía `/api/ml/**`, con traza en pipeline y KPIs.
 
 No incluye todavia:
 

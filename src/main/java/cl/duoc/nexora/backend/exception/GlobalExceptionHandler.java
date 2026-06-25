@@ -93,6 +93,18 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.FORBIDDEN, request, "Acceso denegado");
     }
 
+    @ExceptionHandler(MlServiceException.class)
+    public ResponseEntity<ApiErrorResponse> handleMlService(
+            MlServiceException exception,
+            HttpServletRequest request
+    ) {
+        return buildResponse(
+                exception.getStatus(),
+                request,
+                safeMessage(exception.getMessage(), "Error en el servicio de IA")
+        );
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleException(
             Exception exception,

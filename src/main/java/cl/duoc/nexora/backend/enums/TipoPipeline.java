@@ -4,5 +4,6 @@ public enum TipoPipeline {
     SOLICITUD_COMPRA,
     COTIZACION,
     ORDEN_COMPRA,
-    KPI
+    KPI,
+    ML
 }
