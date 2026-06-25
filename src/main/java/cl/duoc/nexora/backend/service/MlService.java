@@ -3,48 +3,61 @@ package cl.duoc.nexora.backend.service;
 import cl.duoc.nexora.backend.config.MlProperties;
 import cl.duoc.nexora.backend.dto.ml.MlHealthResponse;
 import cl.duoc.nexora.backend.dto.ml.MlMetricsResponse;
+import cl.duoc.nexora.backend.dto.ml.MlPrediction;
 import cl.duoc.nexora.backend.dto.ml.MlPredictionsResponse;
 import cl.duoc.nexora.backend.dto.ml.MlScoreRequest;
 import cl.duoc.nexora.backend.dto.ml.MlTrainRequest;
 import cl.duoc.nexora.backend.dto.ml.MlTrainResponse;
 import cl.duoc.nexora.backend.enums.EstadoPipelineEjecucion;
+import cl.duoc.nexora.backend.enums.MlMode;
 import cl.duoc.nexora.backend.enums.TipoKpi;
 import cl.duoc.nexora.backend.enums.TipoPipeline;
 import cl.duoc.nexora.backend.exception.MlServiceException;
+import cl.duoc.nexora.backend.mapper.MlMapper;
 import cl.duoc.nexora.backend.model.KpiResultado;
+import cl.duoc.nexora.backend.model.MlMetrica;
+import cl.duoc.nexora.backend.model.MlPrediccion;
 import cl.duoc.nexora.backend.model.Pipeline;
 import cl.duoc.nexora.backend.model.PipelineEjecucion;
 import cl.duoc.nexora.backend.model.PipelineError;
 import cl.duoc.nexora.backend.repository.KpiResultadoRepository;
+import cl.duoc.nexora.backend.repository.MlMetricaRepository;
+import cl.duoc.nexora.backend.repository.MlPrediccionRepository;
 import cl.duoc.nexora.backend.repository.PipelineEjecucionRepository;
 import cl.duoc.nexora.backend.repository.PipelineErrorRepository;
 import cl.duoc.nexora.backend.repository.PipelineRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 /**
- * Orquesta la integración con el servicio Python de IA y deja traza de cada
- * ejecución en las entidades de pipeline existentes.
+ * Orquesta la integración con el servicio de IA ({@code EntrenamientoAI}) según el
+ * modo configurado en {@link MlProperties#getMode()}:
  *
  * <ul>
- *   <li>{@code train} y {@code score} se registran como {@link PipelineEjecucion}.</li>
- *   <li>Un fallo del servicio ML genera un {@link PipelineError} y marca la
- *       ejecución como {@link EstadoPipelineEjecucion#FALLIDA}, además de
- *       re-lanzar la {@link MlServiceException} para que el frontend reciba un
- *       error claro.</li>
- *   <li>Las métricas del modelo se persisten como {@link KpiResultado}.</li>
- *   <li>{@code health}, {@code metrics} y {@code predictions} son lecturas y no
- *       generan ejecuciones.</li>
+ *   <li><strong>API</strong> — habla por HTTP con el servicio Python; {@code train}
+ *       y {@code score} se registran como {@link PipelineEjecucion}, los fallos
+ *       generan {@link PipelineError} y las métricas se guardan como {@link KpiResultado}.</li>
+ *   <li><strong>CRON</strong> — el entrenamiento corre como Render Cron Job que
+ *       escribe en Neon; el backend lee {@code ml_metricas} y {@code ml_predicciones}.
+ *       {@code train} responde 409 (lo ejecuta el cron) y {@code score} devuelve las
+ *       últimas predicciones disponibles.</li>
  * </ul>
  *
- * <p>Las llamadas de escritura no son transaccionales a propósito: cada
+ * <p>En cualquier modo se conserva trazabilidad y se devuelven errores claros al
+ * frontend, sin exponer credenciales ni URLs internas.</p>
+ *
+ * <p>Las escrituras de modo API no son transaccionales a propósito: cada
  * {@code save} confirma de inmediato, de modo que el registro de error sobrevive
  * aunque se re-lance la excepción.</p>
  */
@@ -56,34 +69,119 @@ public class MlService {
     private static final String PIPELINE_ENTRENAMIENTO = "ML - Entrenamiento";
     private static final String PIPELINE_SCORING = "ML - Scoring";
 
+    /** Límite máximo de predicciones devueltas en una sola lectura (modo CRON). */
+    private static final int MAX_PREDICCIONES = 100;
+
     private final MlProperties mlProperties;
     private final MlServiceClient mlServiceClient;
     private final PipelineRepository pipelineRepository;
     private final PipelineEjecucionRepository pipelineEjecucionRepository;
     private final PipelineErrorRepository pipelineErrorRepository;
     private final KpiResultadoRepository kpiResultadoRepository;
+    private final MlMetricaRepository mlMetricaRepository;
+    private final MlPrediccionRepository mlPrediccionRepository;
 
-    // ── Lecturas (sin registro de ejecución) ─────────────────────────────────────
+    /** Parser dedicado para la matriz de confusión almacenada como JSON; no requiere bean de Spring. */
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    // ── API pública ──────────────────────────────────────────────────────────────
 
     public MlHealthResponse health() {
         verificarHabilitado();
-        return mlServiceClient.health();
+        return esCron() ? healthCron() : healthApi();
     }
 
     public MlMetricsResponse metrics() {
         verificarHabilitado();
-        return mlServiceClient.metrics();
+        return esCron() ? metricsCron() : mlServiceClient.metrics();
     }
 
     public MlPredictionsResponse predictions() {
         verificarHabilitado();
-        return mlServiceClient.predictions();
+        return esCron() ? leerUltimasPredicciones() : mlServiceClient.predictions();
     }
-
-    // ── Ejecuciones (con traza en pipeline) ──────────────────────────────────────
 
     public MlTrainResponse train(MlTrainRequest request) {
         verificarHabilitado();
+        if (esCron()) {
+            // El entrenamiento lo dispara el Render Cron Job; no se llama al servicio HTTP.
+            throw new MlServiceException(
+                    HttpStatus.CONFLICT,
+                    "El entrenamiento se ejecuta por Render Cron Job; use Trigger Run en Render o espere la próxima ejecución");
+        }
+        return trainViaApi(request);
+    }
+
+    public MlPredictionsResponse score(MlScoreRequest request) {
+        verificarHabilitado();
+        if (esCron()) {
+            // En modo CRON el scoring lo produce el Cron Job: devolvemos las últimas
+            // predicciones desde Neon, lo más coherente para el frontend.
+            log.info("score() en modo CRON: devolviendo últimas predicciones desde Neon");
+            return leerUltimasPredicciones();
+        }
+        return scoreViaApi(request);
+    }
+
+    // ── Modo CRON: lecturas desde Neon ───────────────────────────────────────────
+
+    private MlHealthResponse healthCron() {
+        var ultima = mlMetricaRepository.findFirstByOrderByTsDesc();
+        long totalPredicciones = mlPrediccionRepository.count();
+        boolean disponibles = ultima.isPresent();
+        String status = disponibles ? "ok" : "sin_datos";
+        return new MlHealthResponse(
+                status,
+                "nexora-ml-cron",
+                null,
+                null,
+                MlMode.CRON.name(),
+                disponibles,
+                ultima.map(MlMetrica::getTs).orElse(null),
+                totalPredicciones);
+    }
+
+    private MlMetricsResponse metricsCron() {
+        MlMetrica ultima = mlMetricaRepository.findFirstByOrderByTsDesc()
+                .orElseThrow(() -> new MlServiceException(
+                        HttpStatus.NOT_FOUND,
+                        "Aún no hay métricas disponibles. El Cron Job de entrenamiento no ha registrado resultados todavía."));
+        return MlMapper.toMetricsResponse(ultima, parseMatriz(ultima.getMatrizConfusion()));
+    }
+
+    private MlPredictionsResponse leerUltimasPredicciones() {
+        List<MlPrediccion> filas =
+                mlPrediccionRepository.findByOrderByTsDesc(PageRequest.of(0, MAX_PREDICCIONES));
+        List<MlPrediction> predicciones = filas.stream().map(MlMapper::toPrediction).toList();
+        String status = predicciones.isEmpty() ? "sin_datos" : "ok";
+        return new MlPredictionsResponse(status, predicciones.size(), predicciones);
+    }
+
+    private List<List<Integer>> parseMatriz(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return OBJECT_MAPPER.readValue(json, new TypeReference<List<List<Integer>>>() {});
+        } catch (Exception e) {
+            log.warn("No se pudo parsear matriz_confusion almacenada: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    // ── Modo API: HTTP + traza en pipeline ───────────────────────────────────────
+
+    private MlHealthResponse healthApi() {
+        MlHealthResponse h = mlServiceClient.health();
+        if (h == null) {
+            return new MlHealthResponse("desconocido", "nexora-ml", null, null, MlMode.API.name(), null, null, null);
+        }
+        return new MlHealthResponse(
+                h.status(), h.service(), h.version(), h.modeloCargado(),
+                MlMode.API.name(), null, null, null);
+    }
+
+    private MlTrainResponse trainViaApi(MlTrainRequest request) {
         Pipeline pipeline = obtenerOCrearPipeline(
                 PIPELINE_ENTRENAMIENTO, "Entrenamiento del modelo de IA (EntrenamientoAI)");
         PipelineEjecucion ejecucion = iniciarEjecucion(pipeline, "Entrenamiento ML en progreso");
@@ -101,8 +199,7 @@ public class MlService {
         }
     }
 
-    public MlPredictionsResponse score(MlScoreRequest request) {
-        verificarHabilitado();
+    private MlPredictionsResponse scoreViaApi(MlScoreRequest request) {
         Pipeline pipeline = obtenerOCrearPipeline(
                 PIPELINE_SCORING, "Scoring de registros con el modelo de IA (EntrenamientoAI)");
         PipelineEjecucion ejecucion = iniciarEjecucion(pipeline, "Scoring ML en progreso");
@@ -118,6 +215,10 @@ public class MlService {
     }
 
     // ── Helpers de configuración ─────────────────────────────────────────────────
+
+    private boolean esCron() {
+        return mlProperties.getMode() == MlMode.CRON;
+    }
 
     private void verificarHabilitado() {
         if (!mlProperties.isEnabled()) {

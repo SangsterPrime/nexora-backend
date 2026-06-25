@@ -253,8 +253,9 @@ Tests incluidos:
 - `CotizacionServiceTest`
 - `OrdenCompraServiceTest`
 - `N8nIntegrationServiceTest`
-- `MlServiceTest` (registro de ejecución/KPIs y manejo de fallos en pipeline)
+- `MlServiceTest` (modo API: registro de ejecución/KPIs y manejo de fallos en pipeline)
 - `MlServiceClientTest` (cliente HTTP: URL no configurada y servicio inalcanzable)
+- `MlServiceCronTest` (modo CRON: health/metrics/predictions desde Neon y train que no llama al HTTP)
 
 Cobertura principal:
 
@@ -308,7 +309,7 @@ Cobertura principal:
 ### Resultado esperado
 
 ```text
-Tests run: 52, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 57, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -616,91 +617,161 @@ En el workflow de n8n agrega un nodo de validación del header antes de procesar
 
 ## Integración con servicio ML/IA (EntrenamientoAI)
 
-Nexora integra un servicio Python de IA/DataOps (proyecto `EntrenamientoAI`) para entrenar un modelo, scorear registros y exponer métricas y predicciones.
+Nexora integra el servicio de IA/DataOps (proyecto `EntrenamientoAI`) para entrenar un modelo, scorear registros y exponer métricas y predicciones. Soporta **dos arquitecturas**, seleccionables con `NEXORA_ML_MODE`:
 
-### Arquitectura
+### Arquitecturas
+
+**Modo `API`** (demo con FastAPI) — el backend habla por HTTP con un servicio Python activo:
 
 ```text
-Frontend (Vercel)  →  Backend Spring Boot (Render)  →  Servicio Python ML (EntrenamientoAI)
+Frontend (Vercel)  →  Backend Spring Boot (Render)  →  Servicio Python FastAPI (EntrenamientoAI)
    React/Vite            /api/ml/**                       /health /train /score /metrics /predictions
 ```
 
-- El **frontend nunca llama directamente** al servicio Python. Siempre pasa por el backend bajo `/api/ml/**`.
-- La **API key del servicio ML vive solo en el backend** (variable `NEXORA_ML_API_KEY`) y se envía al servicio Python en el header `X-API-Key`. Nunca se expone al navegador ni se imprime en logs.
-- Cada `train` y `score` queda registrado como `PipelineEjecucion`. Si falla, se crea un `PipelineError` y la ejecución se marca `FALLIDA`. Las métricas del modelo se guardan como `KpiResultado` (`ML_ACCURACY`, `ML_PRECISION`, `ML_RECALL`, `ML_F1`, `ML_ROC_AUC`, `ML_GINI`).
-- Los pipelines `ML - Entrenamiento` y `ML - Scoring` (tipo `ML`) se crean automáticamente la primera vez que se usan.
+**Modo `CRON`** (producción) — el entrenamiento corre como Render Cron Job que escribe en Neon; el backend solo lee de la base y **no depende de un servicio HTTP activo**:
+
+```text
+Python Cron Job (Render)  →  Neon PostgreSQL  →  Backend Spring Boot  →  Frontend (Vercel)
+  EntrenamientoAI             ml_metricas             /api/ml/**            React/Vite
+                              ml_predicciones
+```
+
+En ambos modos:
+
+- El **frontend nunca llama directamente** al servicio Python ni a la base ML; siempre pasa por el backend bajo `/api/ml/**`.
+- No se exponen credenciales ni URLs internas al navegador. En modo API la **API key vive solo en el backend** (`NEXORA_ML_API_KEY`) y viaja al servicio Python en el header `X-API-Key`; nunca se imprime en logs.
+- Se conserva trazabilidad: en modo API cada `train`/`score` se registra como `PipelineEjecucion` (con `PipelineError` si falla y `KpiResultado` `ML_*` para las métricas); en modo CRON la traza la produce el propio Cron Job en `ml_metricas`/`ml_predicciones`.
 
 ### Variables de entorno
 
 `application.properties` lee estas variables de entorno:
 
 - `NEXORA_ML_ENABLED` — activa la integración (default `false`).
-- `NEXORA_ML_URL` — URL base del servicio Python, p. ej. `https://nexora-ml.onrender.com`.
-- `NEXORA_ML_API_KEY` — API key enviada en el header `X-API-Key`. Es secreta.
+- `NEXORA_ML_MODE` — `API` o `CRON` (default `API`).
+- `NEXORA_ML_URL` — URL base del servicio Python (solo modo `API`).
+- `NEXORA_ML_API_KEY` — API key del header `X-API-Key` (solo modo `API`). Es secreta.
 
-En Render configúralas en **Environment** del servicio backend:
+En Render, **Environment** del servicio backend:
 
 ```env
+# Modo API (demo FastAPI)
 NEXORA_ML_ENABLED=true
+NEXORA_ML_MODE=API
 NEXORA_ML_URL=https://nexora-ml.onrender.com
 NEXORA_ML_API_KEY=un_api_key_seguro_aqui
+
+# Modo CRON (producción): el backend lee desde Neon; no requiere URL ni API key
+NEXORA_ML_ENABLED=true
+NEXORA_ML_MODE=CRON
 ```
 
-**No subas la API key a GitHub.** Configúrala solo en Render o en `.env` local (`.env` está ignorado por Git). El archivo `.env.example` incluye los placeholders.
+**No subas la API key a GitHub.** Configúrala solo en Render o en `.env` local (`.env` está ignorado por Git). `.env.example` incluye los placeholders.
+
+### Tablas que escribe el Cron Job (modo CRON)
+
+El Cron Job de `EntrenamientoAI` escribe en Neon estas tablas, que el backend lee ordenando por `ts DESC`:
+
+`ml_metricas` — una fila por corrida de entrenamiento:
+
+| columna | tipo | descripción |
+|---|---|---|
+| `ts` | timestamp | marca temporal de la corrida (clave de orden) |
+| `accuracy`, `recall`, `precision`, `f1`, `roc_auc`, `gini` | double | métricas del modelo |
+| `matriz_confusion` | text | matriz como JSON, p. ej. `[[10,2],[1,20]]` |
+| `modelo`, `n_samples` | varchar / int | opcionales |
+
+`ml_predicciones` — una fila por registro scoreado:
+
+| columna | tipo | descripción |
+|---|---|---|
+| `ts` | timestamp | marca temporal (clave de orden) |
+| `entidad`, `entidad_id` | varchar / bigint | entidad de negocio asociada |
+| `score`, `probabilidad` | double | salida del modelo |
+| `prediccion` | varchar | etiqueta/clase predicha |
+
+### Migración
+
+El script `src/main/resources/db/migration/V1__ml_cron_tables.sql` crea ambas tablas y amplía los `CHECK` de `pipelines.tipo` (permite `ML`) y `kpi_resultados.tipo` (permite `ML_ACCURACY`, `ML_PRECISION`, `ML_RECALL`, `ML_F1`, `ML_ROC_AUC`, `ML_GINI`). Es **idempotente** y segura de re-ejecutar.
+
+Como el proyecto usa `ddl-auto=update`, aplícala una vez sobre Neon:
+
+```bash
+psql "$DB_URL" -f src/main/resources/db/migration/V1__ml_cron_tables.sql
+```
+
+> El script vive en la ruta convencional de Flyway: si más adelante se adopta Flyway (dependencias `flyway-core` + `flyway-database-postgresql` y `FLYWAY_ENABLED=true`), se aplicará automáticamente.
 
 ### Endpoints (fachada del backend)
 
-Todos requieren autenticación (sesión Google OAuth2 activa). Ruta base `/api/ml`:
+Todos requieren autenticación (sesión Google OAuth2 activa). Ruta base `/api/ml`. La respuesta incluye `modo` (`API`/`CRON`):
 
-- `GET /api/ml/health` — estado del servicio Python.
-- `POST /api/ml/train` — dispara entrenamiento (cuerpo opcional). Registra ejecución + KPIs.
-- `POST /api/ml/score` — scorea registros (cuerpo opcional). Registra ejecución.
-- `GET /api/ml/metrics` — métricas del último modelo (`accuracy`, `recall`, `precision`, `f1`, `roc_auc`, `gini`, `matriz_confusion`).
-- `GET /api/ml/predictions` — predicciones/resultados scoreados.
+| Endpoint | Modo API | Modo CRON |
+|---|---|---|
+| `GET /api/ml/health` | estado del servicio Python | si hay métricas, `ultimaEjecucion` y `totalPredicciones` desde Neon |
+| `GET /api/ml/metrics` | métricas del servicio | última fila de `ml_metricas` |
+| `GET /api/ml/predictions` | predicciones del servicio | últimas filas de `ml_predicciones` (máx. 100) |
+| `POST /api/ml/train` | dispara entrenamiento + registra pipeline/KPIs | **409** (lo ejecuta el Cron Job) |
+| `POST /api/ml/score` | scorea + registra pipeline | devuelve las últimas predicciones desde Neon |
+
+Métricas devueltas: `accuracy`, `recall`, `precision`, `f1`, `roc_auc`, `gini`, `matriz_confusion`.
 
 ### Manejo de errores
 
-`GlobalExceptionHandler` traduce los fallos del servicio ML a respuestas claras con el formato estándar `ApiErrorResponse`:
+`GlobalExceptionHandler` traduce los fallos a respuestas claras con el formato estándar `ApiErrorResponse`:
 
 ```json
-// Integración desactivada o sin configurar (503)
+// Integración desactivada (503)
 { "status": 503, "mensaje": "Integración ML desactivada. Configure NEXORA_ML_ENABLED=true para habilitarla.", "path": "/api/ml/health" }
 
-// URL no configurada (503)
-{ "status": 503, "mensaje": "NEXORA_ML_URL no configurada", "path": "/api/ml/health" }
+// Modo CRON, sin métricas registradas aún (404)
+{ "status": 404, "mensaje": "Aún no hay métricas disponibles. El Cron Job de entrenamiento no ha registrado resultados todavía.", "path": "/api/ml/metrics" }
 
-// Servicio ML caído o con error (502)
+// Modo CRON, train no disponible por fachada (409)
+{ "status": 409, "mensaje": "El entrenamiento se ejecuta por Render Cron Job; use Trigger Run en Render o espere la próxima ejecución", "path": "/api/ml/train" }
+
+// Modo API, servicio caído o con error (502)
 { "status": 502, "mensaje": "No se pudo conectar con el servicio de IA", "path": "/api/ml/health" }
 { "status": 502, "mensaje": "El servicio de IA respondió con error 500", "path": "/api/ml/train" }
 ```
 
 ### Cómo probar localmente
 
-1. Levanta el servicio Python `EntrenamientoAI` (por defecto suele exponerse en `http://localhost:8000`).
-2. Configura el `.env` del backend:
+**Modo API** (con FastAPI):
+
+1. Levanta el servicio Python `EntrenamientoAI` (suele exponerse en `http://localhost:8000`).
+2. `.env` del backend:
 
    ```env
    NEXORA_ML_ENABLED=true
+   NEXORA_ML_MODE=API
    NEXORA_ML_URL=http://localhost:8000
    NEXORA_ML_API_KEY=el_mismo_api_key_del_servicio_python
    ```
 
-3. Arranca el backend:
+**Modo CRON** (sin servicio Python activo):
 
-   ```powershell
-   $env:JAVA_HOME="C:\Program Files\Java\jdk-21.0.11"
-   .\mvnw.cmd spring-boot:run
+1. Aplica la migración en tu base local y deja que el Cron Job (o un `INSERT` manual) escriba filas en `ml_metricas`/`ml_predicciones`.
+2. `.env` del backend:
+
+   ```env
+   NEXORA_ML_ENABLED=true
+   NEXORA_ML_MODE=CRON
    ```
 
-4. Como los endpoints requieren sesión, inicia sesión con Google OAuth2 desde el frontend y prueba desde ahí, o usa una cookie de sesión válida. Ejemplo de verificación de estado:
+En ambos casos arranca el backend y prueba (los endpoints requieren sesión Google OAuth2):
 
-   ```text
-   GET http://localhost:8080/api/ml/health
-   ```
+```powershell
+$env:JAVA_HOME="C:\Program Files\Java\jdk-21.0.11"
+.\mvnw.cmd spring-boot:run
+```
 
-   Si `NEXORA_ML_ENABLED=false`, el backend responde `503` con un mensaje claro sin llamar al servicio Python.
+```text
+GET http://localhost:8080/api/ml/health
+```
 
-> Nota: las métricas guardadas como `KpiResultado` se redondean a 2 decimales (columna `NUMERIC(15,2)`). El valor completo siempre está disponible vía `GET /api/ml/metrics`.
+Si `NEXORA_ML_ENABLED=false`, el backend responde `503` con un mensaje claro sin tocar el servicio Python ni la base ML.
+
+> Nota: las métricas guardadas como `KpiResultado` (modo API) se redondean a 2 decimales (columna `NUMERIC(15,2)`). El valor completo siempre está disponible vía `GET /api/ml/metrics`.
 
 ---
 

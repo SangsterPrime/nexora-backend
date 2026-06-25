@@ -42,7 +42,8 @@ class MlControllerTest {
 
     @Test
     void health_devuelveOk() throws Exception {
-        when(mlService.health()).thenReturn(new MlHealthResponse("ok", "entrenamiento-ai", "1.0", true));
+        when(mlService.health())
+                .thenReturn(new MlHealthResponse("ok", "entrenamiento-ai", "1.0", true, "API", null, null, null));
 
         mockMvc.perform(get("/api/ml/health"))
                 .andExpect(status().isOk())
