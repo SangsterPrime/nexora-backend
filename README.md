@@ -91,7 +91,7 @@ OAUTH2_FAILURE_REDIRECT_URL=http://localhost:5173/login?error=oauth
 También lee, opcionalmente, las variables de las integraciones externas:
 
 - `N8N_ENABLED`, `N8N_WEBHOOK_URL`, `N8N_WEBHOOK_SECRET` (ver [Integración con n8n](#integración-con-n8n))
-- `NEXORA_ML_ENABLED`, `NEXORA_ML_URL`, `NEXORA_ML_API_KEY` (ver [Integración con servicio ML/IA](#integración-con-servicio-mlia-entrenamientoai))
+- `NEXORA_ML_ENABLED`, `NEXORA_ML_MODE`, `NEXORA_ML_URL`, `NEXORA_ML_API_KEY` (ver [Integración con servicio ML/IA](#integración-con-servicio-mlia-entrenamientoai))
 
 `DB_URL` debe usar formato JDBC, no el formato `postgresql://` entregado originalmente por Neon.
 
@@ -794,11 +794,12 @@ Incluye:
 - Paginacion y filtros en listados principales.
 - Configuracion preparada para Render con Neon PostgreSQL via variables de entorno.
 - Integración opcional con n8n vía webhook.
-- Integración con el servicio Python de IA (EntrenamientoAI) vía `/api/ml/**`, con traza en pipeline y KPIs.
+- Spring Security con Google OAuth2 y sesion cross-site Vercel/Render.
+- Integración con el servicio Python de IA (EntrenamientoAI) vía `/api/ml/**`.
+- Modo ML `API` para demo FastAPI y modo `CRON` para produccion con Render Cron Job, Neon, `ml_metricas` y `ml_predicciones`.
+- Migracion SQL idempotente para tablas ML y valores `ML_*` en pipelines/KPIs.
 
 No incluye todavia:
 
-- Spring Security.
-- Login o autenticacion.
-- Migraciones Flyway/Liquibase.
+- Flyway/Liquibase cableado automaticamente en runtime; la migracion SQL actual se aplica manualmente.
 - CRUD completo para errores de pipeline y KPI.
