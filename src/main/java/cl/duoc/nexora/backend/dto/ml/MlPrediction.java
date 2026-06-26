@@ -23,6 +23,17 @@ public record MlPrediction(
         @JsonProperty("entidad_id") Long entidadId,
         Double score,
         Double probabilidad,
-        String prediccion
+        String prediccion,
+        // Campos ricos de predicciones.json / clientes_scoreados
+        Integer edad,
+        @JsonProperty("anos_cliente") Integer anosCliente,
+        @JsonProperty("uso_datos_gb") Double usoDatosGb,
+        @JsonProperty("llamadas_mes") Integer llamadasMes,
+        Integer reclamos,
+        @JsonProperty("plan_premium") Integer planPremium,
+        Integer abandona,
+        @JsonProperty("prob_abandono") Double probAbandono,
+        @JsonProperty("segmento_riesgo") String segmentoRiesgo,
+        @JsonProperty("accion_retencion") String accionRetencion
 ) {
 }

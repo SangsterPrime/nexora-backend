@@ -1,12 +1,15 @@
 package cl.duoc.nexora.backend.controller;
 
+import cl.duoc.nexora.backend.dto.ml.ClienteScoreadoResponse;
 import cl.duoc.nexora.backend.dto.ml.MlHealthResponse;
 import cl.duoc.nexora.backend.dto.ml.MlMetricsResponse;
 import cl.duoc.nexora.backend.dto.ml.MlPredictionsResponse;
 import cl.duoc.nexora.backend.dto.ml.MlScoreRequest;
 import cl.duoc.nexora.backend.dto.ml.MlTrainRequest;
 import cl.duoc.nexora.backend.dto.ml.MlTrainResponse;
+import cl.duoc.nexora.backend.service.ClienteScoreadoService;
 import cl.duoc.nexora.backend.service.MlService;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -32,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MlController {
 
     private final MlService mlService;
+    private final ClienteScoreadoService clienteScoreadoService;
 
     /** Verifica el estado del servicio Python. */
     @GetMapping("/health")
@@ -61,5 +65,11 @@ public class MlController {
     @GetMapping("/predictions")
     public MlPredictionsResponse predictions() {
         return mlService.predictions();
+    }
+
+    /** Devuelve todos los clientes scoreados desde la tabla clientes_scoreados (datos ricos con accion_retencion). */
+    @GetMapping("/clientes-scoreados")
+    public List<ClienteScoreadoResponse> clientesScoreados() {
+        return clienteScoreadoService.listar();
     }
 }

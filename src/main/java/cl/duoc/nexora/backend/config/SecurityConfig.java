@@ -56,6 +56,7 @@ public class SecurityConfig {
                                 "/api/ordenes-compra/**",
                                 "/api/pipelines/**",
                                 "/api/pipeline-ejecuciones/**",
+                                "/api/kpi-resultados/**",
                                 "/api/integrations/**",
                                 "/api/ml/**"
                         ).authenticated()

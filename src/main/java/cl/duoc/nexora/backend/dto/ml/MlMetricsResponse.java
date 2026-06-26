@@ -27,6 +27,18 @@ public record MlMetricsResponse(
         Double f1,
         @JsonProperty("roc_auc") Double rocAuc,
         Double gini,
-        @JsonProperty("matriz_confusion") List<List<Integer>> matrizConfusion
+        @JsonProperty("matriz_confusion") List<List<Integer>> matrizConfusion,
+        @JsonProperty("modelo_seleccionado") String modeloSeleccionado,
+        @JsonProperty("importancia_variables") java.util.Map<String, Double> importanciaVariables,
+        @JsonProperty("metricas_por_modelo") java.util.Map<String, ModeloMetrica> metricasPorModelo
 ) {
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record ModeloMetrica(
+            Double accuracy,
+            Double precision,
+            Double recall,
+            Double f1,
+            @JsonProperty("roc_auc") Double rocAuc,
+            Double gini
+    ) {}
 }
