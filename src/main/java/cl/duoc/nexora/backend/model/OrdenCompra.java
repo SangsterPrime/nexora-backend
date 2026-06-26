@@ -1,0 +1,72 @@
+package cl.duoc.nexora.backend.model;
+
+import cl.duoc.nexora.backend.enums.EstadoOrdenCompra;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+@Entity
+@Table(name = "ordenes_compra")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class OrdenCompra {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, unique = true, length = 40)
+    private String numero;
+
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "solicitud_compra_id", nullable = false, unique = true)
+    private SolicitudCompra solicitudCompra;
+
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "cotizacion_ganadora_id", nullable = false, unique = true)
+    private Cotizacion cotizacionGanadora;
+
+    @Column(nullable = false, precision = 15, scale = 2)
+    private BigDecimal montoTotal;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private EstadoOrdenCompra estado;
+
+    @Column(nullable = false, updatable = false)
+    @CreationTimestamp
+    private LocalDateTime fechaEmision;
+
+    @Column(nullable = false)
+    @UpdateTimestamp
+    private LocalDateTime actualizadoEn;
+
+    @PrePersist
+    void prePersist() {
+        if (estado == null) {
+            estado = EstadoOrdenCompra.EMITIDA;
+        }
+    }
+
+}
