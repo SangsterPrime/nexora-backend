@@ -47,6 +47,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     private String appRedirectUrl() {
         if (successRedirectUrl != null && !successRedirectUrl.isBlank()) {
             return successRedirectUrl;
+            
         }
 
         String baseUrl = frontendUrl.endsWith("/")
